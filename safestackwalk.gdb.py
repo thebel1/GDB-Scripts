@@ -4,7 +4,7 @@
 # Written by Tom Hebel, 2020
 #######################################################################
 
-# python exec(open("~/programming/gdb/safestackwalk.gdb.py").read())
+# python exec(open("/home/thebel/programming/gdb/safestackwalk.gdb.py").read())
 
 #
 # To be used when `info frame` fails. This script only uses information
@@ -17,6 +17,7 @@
 # TODO
 #   - Implement variable resolution.
 #   - Implement differentiation between arguments and locals.
+#   - Align to pep8 style guide.
 
 import gdb
 import sys
@@ -26,8 +27,9 @@ from typing import List, Dict
 # looking for a frame boundary.
 MAX_FRAME_SIZE = 512
 
-# Size in bytes of the x86 CALL instruction.
-CALL_INSTRUCTION_SIZE = 5
+# Max. size in bytes of a valid x86 instruction.
+# https://stackoverflow.com/questions/14698350/x86-64-asm-maximum-bytes-for-an-instruction
+MAX_INSTRUCTION_SIZE = 15
 
 # -----------------------------------------------------------------------
 # class GDB_SafeStackWalk --
@@ -100,7 +102,7 @@ class GDB_SafeStackWalk(gdb.Command):
         while frameHiAddr - frameLoAddr <= maxFrameSize:
             chunkAddr = frameHiAddr
             try:
-                chunkValue = int(gdb.parse_and_eval('*(uint64*){}'.format(chunkAddr)))
+                chunkValue = int(gdb.parse_and_eval('*(void**){}'.format(chunkAddr)))
             except gdb.MemoryError:
                 print('Inaccessible address: {}'.format(hex(chunkAddr)))
                 break
@@ -110,8 +112,9 @@ class GDB_SafeStackWalk(gdb.Command):
             symbolOffset = 0
             symbolSection = ''
             symbolIsReturnAddrCandidate = False
+            symbolIsReturnAddress = False
             if 'in section .text' in symbolInfo:
-                symbolInfoArr = Utils.extractFieldsLikeAwk(symbolInfo)
+                symbolInfoArr = self.extractFieldsLikeAwk(symbolInfo)
                 #print(symbolInfoArr)
                 symbolName = symbolInfoArr[0]
                 if ' + ' in symbolInfo:
@@ -122,10 +125,20 @@ class GDB_SafeStackWalk(gdb.Command):
                 else:
                     symbolSection = symbolInfoArr[3]
             if symbolIsReturnAddrCandidate:
-                prevInstrRaw = gdb.execute('x/i {} - {}'.format(chunkValue, hex(CALL_INSTRUCTION_SIZE)), to_string=True)
-                functionCallArr = Utils.extractFieldsLikeAwk(prevInstrRaw)
-                #print(prevInstrRaw)
-                if len(functionCallArr) > 3 and functionCallArr[2] == 'call':
+                # What this does is attempt to find the previous instruction.
+                # Problem is, we don't know its size a priori. So, we count down
+                # from MAX_INSTRUCTION_SIZE in bytes until we either reach 1 byte
+                # or find a valid call instruction.
+                # TODO: figure out a better way of doing this.
+                for instrSize in range(MAX_INSTRUCTION_SIZE, 0, -1):
+                    prevInstrRaw = gdb.execute('x/i {} - {}'.format(chunkValue, hex(instrSize)), to_string=True)
+                    functionCallArr = self.extractFieldsLikeAwk(prevInstrRaw)
+                    if len(functionCallArr) > 3                                \
+                            and 'call' in functionCallArr[2].lower():
+                        symbolIsReturnAddress = True
+                        break
+                #print(functionCallArr)
+                if symbolIsReturnAddress:
                     #print('foobar')
                     chunkCount = int((frameHiAddr - frameLoAddr) / addrSize) + 1
                     #print('x/{}gx {}'.format(chunkCount, frameLoAddr))
@@ -136,8 +149,11 @@ class GDB_SafeStackWalk(gdb.Command):
                     stackFrame['returnAddr'] = chunkValue
                     stackFrame['returnFunction'] = symbolInfoArr[0]
                     stackFrame['returnFunctionOffset'] = int(symbolInfoArr[2])
-                    stackFrame['functionAddr'] = int(functionCallArr[3], 16)
-                    stackFrame['functionName'] = functionCallArr[4][1:-1]
+                    stackFrame['functionAddr'] = functionCallArr[3]
+                    if len(functionCallArr) > 4:
+                        stackFrame['functionName'] = functionCallArr[4][1:-1]
+                    else:
+                        stackFrame['functionName'] = '??'
                     stackFrame['hexDump'] = hexDump
                     stackFrame['returnAddrMismatch'] = False
                     if len(stackFrames) > 0:
@@ -168,7 +184,7 @@ class GDB_SafeStackWalk(gdb.Command):
                 'Frame\t#{:<d}\t{:>s}(...) at {:<s}'.format(
                     frameNum,
                     stackFrame['functionName'],
-                    hex(stackFrame['functionAddr'])
+                    stackFrame['functionAddr']
                 )
             )
             print(
