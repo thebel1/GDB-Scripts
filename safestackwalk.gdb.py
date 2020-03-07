@@ -151,7 +151,8 @@ class GDB_SafeStackWalk(gdb.Command):
                     stackFrame['returnFunction'] = symbolInfoArr[0]
                     stackFrame['returnFunctionOffset'] = int(symbolInfoArr[2])
                     stackFrame['functionAddr'] = functionCallArr[3]
-                    if len(functionCallArr) > 4:
+                    if len(functionCallArr) > 4                         \
+                            and len(functionCallArr[4][1:-1]) > 0:
                         stackFrame['functionName'] = functionCallArr[4][1:-1]
                     else:
                         stackFrame['functionName'] = '??'
