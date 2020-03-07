@@ -147,9 +147,11 @@ class GDB_SafeStackWalk(gdb.Command):
                     stackFrame = self.__getStackFrameDict()
                     stackFrame['loAddr'] = frameLoAddr
                     stackFrame['hiAddr'] = frameHiAddr
+                    stackFrame['returnAddrLoc'] = chunkAddr
                     stackFrame['returnAddr'] = chunkValue
                     stackFrame['returnFunction'] = symbolInfoArr[0]
                     stackFrame['returnFunctionOffset'] = int(symbolInfoArr[2])
+                    stackFrame['functionCallAddr'] = int(functionCallArr[0], 16)
                     stackFrame['functionAddr'] = functionCallArr[3]
                     if len(functionCallArr) > 4                         \
                             and len(functionCallArr[4][1:-1]) > 0:
@@ -189,14 +191,14 @@ class GDB_SafeStackWalk(gdb.Command):
         frameNum = 0
         for stackFrame in stackFrames:
             print(
-                'Frame\t#{:<d}\t{:>s}(...) at {:<s}'.format(
+                'Frame\t#{:<d}\t\t{:>s}(...) at {:<s}'.format(
                     frameNum,
                     stackFrame['functionName'],
                     stackFrame['functionAddr']
                 )
             )
             print(
-                'Returns to:\t{:>s} + {:<s} at {:<s}'.format(
+                'Returns to:\t\t{:>s} + {:<s} at {:<s}'.format(
                     stackFrame['returnFunction'],
                     hex(stackFrame['returnFunctionOffset']),
                     hex(stackFrame['returnAddr'])
@@ -206,6 +208,10 @@ class GDB_SafeStackWalk(gdb.Command):
                 mismatchedReturnAddrs += 1
                 # Let's not be alarmist...
                 #print('\t<RETURN ADDRESS DOES NOT MATCH NEXT FRAME>', end='')
+            print('Called at\t\t{}'.format(
+                hex(stackFrame['functionCallAddr'])))    
+            print('Return address at\t{}'.format(
+                hex(stackFrame['returnAddrLoc'])))
             print('Hex Dump:')
             print(stackFrame['hexDump'], end='\n\n')
             frameNum += 1
@@ -227,9 +233,11 @@ class GDB_SafeStackWalk(gdb.Command):
         return {
             'loAddr': 0,
             'hiAddr': 0,
+            'returnAddrLoc': 0,
             'returnAddr': 0,
             'returnFunction' : '',
             'returnFunctionOffset': 0,
+            'functionCallAddr': 0,
             'functionAddr': 0,
             'functionName': '',
             'returnAddrMismatch': False,
