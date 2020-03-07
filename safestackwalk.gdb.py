@@ -198,7 +198,7 @@ class GDB_SafeStackWalk(gdb.Command):
                 )
             )
             print(
-                'Returns to:\t\t{:>s} + {:<s} at {:<s}'.format(
+                'Returns to\t\t{:>s} + {:<s} at {:<s}'.format(
                     stackFrame['returnFunction'],
                     hex(stackFrame['returnFunctionOffset']),
                     hex(stackFrame['returnAddr'])
@@ -208,7 +208,7 @@ class GDB_SafeStackWalk(gdb.Command):
                 mismatchedReturnAddrs += 1
                 # Let's not be alarmist...
                 #print('\t<RETURN ADDRESS DOES NOT MATCH NEXT FRAME>', end='')
-            print('Called at\t\t{}'.format(
+            print('Call at\t\t\t{}'.format(
                 hex(stackFrame['functionCallAddr'])))    
             print('Return address at\t{}'.format(
                 hex(stackFrame['returnAddrLoc'])))
