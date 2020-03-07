@@ -16,7 +16,6 @@
 
 # TODO
 #   - Implement variable resolution.
-#   - Implement differentiation between arguments and locals.
 #   - Align to pep8 style guide.
 
 import gdb
@@ -106,6 +105,7 @@ class GDB_SafeStackWalk(gdb.Command):
             except gdb.MemoryError:
                 print('Inaccessible address: {}'.format(hex(chunkAddr)))
                 break
+            frameVars = {}
             symbolInfo = gdb.execute('info symbol {}'.format(hex(chunkValue)), to_string=True)
             #print(symbolInfo)
             symbolName = ''
@@ -142,7 +142,8 @@ class GDB_SafeStackWalk(gdb.Command):
                     #print('foobar')
                     chunkCount = int((frameHiAddr - frameLoAddr) / addrSize) + 1
                     #print('x/{}gx {}'.format(chunkCount, frameLoAddr))
-                    hexDump = gdb.execute('x/{}gx {}'.format(chunkCount, frameLoAddr), to_string=True)
+                    hexDump = gdb.execute('x/{}gx {}'.format(
+                        chunkCount, frameLoAddr), to_string=True)
                     stackFrame = self.__getStackFrameDict()
                     stackFrame['loAddr'] = frameLoAddr
                     stackFrame['hiAddr'] = frameHiAddr
@@ -157,11 +158,17 @@ class GDB_SafeStackWalk(gdb.Command):
                     stackFrame['hexDump'] = hexDump
                     stackFrame['returnAddrMismatch'] = False
                     if len(stackFrames) > 0:
-                        stackFrame['returnAddrMismatch'] = (stackFrame['functionName'] != stackFrames[-1]['functionName'])
+                        stackFrame['returnAddrMismatch'] = (
+                            stackFrame['functionName']          \
+                            != stackFrames[-1]['functionName']  \
+                        )
                     stackFrames.append(stackFrame)
                     #print(stackFrame)
                     frameHiAddr += addrSize
                     frameLoAddr = frameHiAddr
+            else:   # symbolIsReturnAddrCandidate
+                # Put the var resolution code here.
+                pass
             frameHiAddr += addrSize
             #break
             #if len(self.__stackFrames) == 5:
@@ -175,7 +182,7 @@ class GDB_SafeStackWalk(gdb.Command):
             return
 
         print('{} possible stack frames found.'.format(len(stackFrames)), end='\n\n')
-        print('Note: the frame boundary is the location of the return address.', end='\n\n')
+        print('Note: the frame boundary is assumed to be the location of the return address.', end='\n\n')
 
         mismatchedReturnAddrs = 0
         frameNum = 0
@@ -225,6 +232,7 @@ class GDB_SafeStackWalk(gdb.Command):
             'functionAddr': 0,
             'functionName': '',
             'returnAddrMismatch': False,
+            'variables': {},
             'hexDump': ''
         }
 
