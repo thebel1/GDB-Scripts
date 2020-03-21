@@ -4,6 +4,8 @@
 # Written by Tom Hebel, 2020
 #######################################################################
 
+# python exec(open("/home/thebel/programming/gdb/safestackwalk.gdb.py").read())
+
 #
 # To be used when `info frame` fails. This script only uses information
 # present in memory starting with a given address as well as GDB's symbol
@@ -86,7 +88,6 @@ class GDB_SafeStackWalk(gdb.Command):
             print(sys.exc_info())
             return
 
-        print('Searching for stack frames...')
         stackFrames = self.__processMemory(stackLoAddr, maxFrameSize)
         self.__printStack(stackFrames)
 
@@ -129,34 +130,13 @@ class GDB_SafeStackWalk(gdb.Command):
                 # from MAX_INSTRUCTION_SIZE in bytes until we either reach 1 byte
                 # or find a valid call instruction.
                 # TODO: figure out a better way of doing this.
-                #for instrSize in range(MAX_INSTRUCTION_SIZE, 0, -1):
-                #    prevInstrRaw = gdb.execute('x/i {} - {}'.format(chunkValue, hex(instrSize)), to_string=True)
-                #    functionCallArr = self.extractFieldsLikeAwk(prevInstrRaw)
-                #    if len(functionCallArr) > 3                                \
-                #            and 'call' in functionCallArr[2].lower():
-                #        symbolIsReturnAddress = True
-                #        break
-                prevInstrsRaw = gdb.execute('disas {}-{},{}'.format(
-                    hex(chunkValue),
-                    hex(MAX_INSTRUCTION_SIZE),
-                    hex(chunkValue)
-                ), to_string=True).split('\n')
-                functionCallArr = self.extractFieldsLikeAwk(prevInstrsRaw[-3])
-                if len(functionCallArr) > 3:
-                    instrName = functionCallArr[2].lower()
-                    if instrName == 'call':
+                for instrSize in range(MAX_INSTRUCTION_SIZE, 0, -1):
+                    prevInstrRaw = gdb.execute('x/i {} - {}'.format(chunkValue, hex(instrSize)), to_string=True)
+                    functionCallArr = self.extractFieldsLikeAwk(prevInstrRaw)
+                    if len(functionCallArr) > 3                                \
+                            and 'call' in functionCallArr[2].lower():
                         symbolIsReturnAddress = True
-                    elif instrName == 'jmp':
-                        instrOperand = functionCallArr[3]
-                        #print(functionCallArr)
-                        try:
-                            operandSymbolInfo = gdb.execute('info symbol {}'.format(instrOperand), to_string=True)
-                            # We will ignore conditional jumps for the purpose of tail calls.
-                            if ' in section .text' in operandSymbolInfo:
-                                symbolIsReturnAddress = True
-                            #print(operandSymbolInfo)
-                        except:
-                            pass
+                        break
                 #print(functionCallArr)
                 if symbolIsReturnAddress:
                     #print('foobar')
@@ -164,11 +144,6 @@ class GDB_SafeStackWalk(gdb.Command):
                     #print('x/{}gx {}'.format(chunkCount, frameLoAddr))
                     hexDump = gdb.execute('x/{}gx {}'.format(
                         chunkCount, frameLoAddr), to_string=True)
-                    #try:
-                    #    symbols = gdb.block_for_pc(int(functionCallArr[3], 16))
-                    #except:
-                    #    symbols = []
-                    symbols = []
                     stackFrame = self.__getStackFrameDict()
                     stackFrame['loAddr'] = frameLoAddr
                     stackFrame['hiAddr'] = frameHiAddr
@@ -180,18 +155,7 @@ class GDB_SafeStackWalk(gdb.Command):
                     stackFrame['functionAddr'] = functionCallArr[3]
                     if len(functionCallArr) > 4                         \
                             and len(functionCallArr[4][1:-1]) > 0:
-                        # Oh god oh no oh... (fix this)
-                        try:
-                            # The way this "works" is that the int() call will throw an exception
-                            # if the value is not a hex number encoded as a string. If this happens,
-                            # execution will go straight to the `except` block and not attempt to set
-                            # stackFrame['functionName']. I hate using an exception for what should
-                            # be an if statement, but I can't be bothered to write a hex string parser
-                            # and I don't know of any.
-                            tmp = int(functionCallArr[3], 16)
-                            stackFrame['functionName'] = functionCallArr[4][1:-1]
-                        except:
-                            stackFrame['functionName'] = '??'
+                        stackFrame['functionName'] = functionCallArr[4][1:-1]
                     else:
                         stackFrame['functionName'] = '??'
                     stackFrame['hexDump'] = hexDump
@@ -201,11 +165,13 @@ class GDB_SafeStackWalk(gdb.Command):
                             stackFrame['functionName']          \
                             != stackFrames[-1]['functionName']  \
                         )
-                    stackFrame['symbols'] = symbols
                     stackFrames.append(stackFrame)
                     #print(stackFrame)
                     frameHiAddr += addrSize
                     frameLoAddr = frameHiAddr
+            else:   # symbolIsReturnAddrCandidate
+                # Put the var resolution code here.
+                pass
             frameHiAddr += addrSize
             #break
             #if len(self.__stackFrames) == 5:
@@ -219,9 +185,7 @@ class GDB_SafeStackWalk(gdb.Command):
             return
 
         print('{} possible stack frames found.'.format(len(stackFrames)), end='\n\n')
-        print('Note: the frame boundary is assumed to be at the location')
-        print('of the return address. This means arguments will potentially')
-        print('appear in the next stack frame.', end='\n\n')
+        print('Note: the frame boundary is assumed to be the location of the return address.', end='\n\n')
 
         mismatchedReturnAddrs = 0
         frameNum = 0
@@ -245,17 +209,9 @@ class GDB_SafeStackWalk(gdb.Command):
                 # Let's not be alarmist...
                 #print('\t<RETURN ADDRESS DOES NOT MATCH NEXT FRAME>', end='')
             print('Call at\t\t\t{}'.format(
-                hex(stackFrame['functionCallAddr'])))
+                hex(stackFrame['functionCallAddr'])))    
             print('Return address at\t{}'.format(
                 hex(stackFrame['returnAddrLoc'])))
-            #print('Symbols:')
-            #for symbol in stackFrame['symbols']:
-            #    if symbol.is_argument or symbol.is_variable:
-            #        print('\t{:<24s}\t{} of type {}'.format(
-            #            (symbol.print_name +':'),
-            #            ('local' if symbol.is_variable else 'arg'),
-            #            symbol.type
-            #        ))
             print('Hex Dump:')
             print(stackFrame['hexDump'], end='\n\n')
             frameNum += 1
@@ -282,12 +238,11 @@ class GDB_SafeStackWalk(gdb.Command):
             'returnFunction' : '',
             'returnFunctionOffset': 0,
             'functionCallAddr': 0,
-            'functionAddr': '',
+            'functionAddr': 0,
             'functionName': '',
             'returnAddrMismatch': False,
             'variables': {},
-            'hexDump': '',
-            'symbols': []
+            'hexDump': ''
         }
 
 
