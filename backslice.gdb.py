@@ -105,7 +105,6 @@ class GDB_BackSlice(gdb.Command):
         self.pprint = pprint.PrettyPrinter(compact=True)
 
     def invoke(self, argstr, from_tty):
-        global backSliceParams
         argv = None
         try:
             argv = shlex.split(argstr)
@@ -333,7 +332,6 @@ class GDB_BackSlice(gdb.Command):
             return
 
     def validateParams(self, params):
-        global backSliceParams
         for k, v in params.items():
             if k not in backSliceParams:
                 error(f'invalid key in params: {k}')
@@ -382,7 +380,6 @@ class GDB_BackSlice(gdb.Command):
                     raise TypeError
 
     def mergeParams(self, new_params):
-        global backSliceParams
         params = copy.deepcopy(backSliceParams)
         if 'regs' in new_params.keys():
             for k, v in new_params['regs'].items():
