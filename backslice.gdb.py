@@ -17,6 +17,7 @@ import sys
 import shlex
 import argparse
 import pprint
+import copy
 import json
 import triton
 
@@ -104,6 +105,7 @@ class GDB_BackSlice(gdb.Command):
         self.pprint = pprint.PrettyPrinter(compact=True)
 
     def invoke(self, argstr, from_tty):
+        global backSliceParams
         argv = None
         try:
             argv = shlex.split(argstr)
@@ -172,7 +174,7 @@ class GDB_BackSlice(gdb.Command):
                 fatal(f'unable to decode "params" argument as JSON: {exc}')
                 return
         else:
-            params = backSliceParams
+            params = copy.deepcopy(backSliceParams)
 
         # Validate and initialize addresses.
         start_addr = 0
@@ -203,7 +205,7 @@ class GDB_BackSlice(gdb.Command):
         if params['regs']['rip'] == -1:
             params['regs']['rip'] = start_addr
             entry_addr = start_addr
-        elif params['regs']['rip'] < start_addr                                    \
+        elif params['regs']['rip'] < start_addr                                 \
                 or params['regs']['rip'] > end_addr:
             fatal('the initial rip must be in [start_addr, end_addr]')
             return
@@ -331,6 +333,7 @@ class GDB_BackSlice(gdb.Command):
             return
 
     def validateParams(self, params):
+        global backSliceParams
         for k, v in params.items():
             if k not in backSliceParams:
                 error(f'invalid key in params: {k}')
@@ -379,7 +382,8 @@ class GDB_BackSlice(gdb.Command):
                     raise TypeError
 
     def mergeParams(self, new_params):
-        params = backSliceParams
+        global backSliceParams
+        params = copy.deepcopy(backSliceParams)
         if 'regs' in new_params.keys():
             for k, v in new_params['regs'].items():
                 try:
