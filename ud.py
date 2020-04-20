@@ -167,4 +167,4 @@ def is_rel_jump(hexarr):
 	return False
 
 if __name__ == '__main__':
-main()
+    main()
