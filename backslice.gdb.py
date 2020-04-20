@@ -157,6 +157,16 @@ class GDB_BackSlice(gdb.Command):
             args = parser.parse_args(argv)
         except TypeError:
             return
+
+        # Validate and initialize architecture.
+        inferior = gdb.selected_inferior()
+        arch_raw = gdb.execute('show architecture', to_string=True)
+        arch = arch_raw.split(' ')[-1][0:-2]
+        if arch != 'i386:x86-64':
+            printable_arch = arch.replace('"', '\\"')
+            fatal((f'unsupported architecture "{printable_arch}";'
+                  ' only x86-64 currently supported'))
+            return
         
         # Validate and initialize JSON params.
         params = None
@@ -219,15 +229,6 @@ class GDB_BackSlice(gdb.Command):
             target_reg_name = args.target_reg
         else:
             fatal(f'invalid target_reg: {args.target_reg}')
-            return
-
-        inferior = gdb.selected_inferior()
-        arch_raw = gdb.execute('show architecture', to_string=True)
-        arch = arch_raw.split(' ')[-1][0:-2]
-        if arch != 'i386:x86-64':
-            printable_arch = arch.replace('"', '\\"')
-            fatal((f'unsupported architecture "{printable_arch}";'
-                  ' only x86-64 currently supported'))
             return
 
         # Ensure memory at start_addr, end_addr, target_addr, and entry_addr is
@@ -333,7 +334,7 @@ class GDB_BackSlice(gdb.Command):
 
     def validateParams(self, params):
         for k, v in params.items():
-            if k not in backSliceParams:
+            if k not in backSliceParams.keys():
                 error(f'invalid key in params: {k}')
                 raise TypeError
 
@@ -408,7 +409,7 @@ class GDB_BackSlice(gdb.Command):
         return params
 
     def mapRegToTritonSymbol(self, reg):
-        if reg not in x64RegToTritonSymbolMapping:
+        if reg not in x64RegToTritonSymbolMapping.keys():
             return None
         else:
             return x64RegToTritonSymbolMapping[reg]
